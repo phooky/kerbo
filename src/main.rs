@@ -5,6 +5,7 @@ use std::io::Read;
 use std::time::Duration;
 use std::thread;
 use serial::SerialPort;
+use std::ffi::OsStr;
 
 // Lasers are mounted on either side of the camera. "Left" and "Right"
 // here refer to the camera's point of view, not the user's!
@@ -19,15 +20,19 @@ struct Kerbo {
 }
 
 impl Kerbo {
-    pub fn new(mut port : serial::SystemPort) -> Kerbo {
+    pub fn new_from_port(mut port : serial::SystemPort) -> serial::Result<Kerbo> {
         // flush serial port. This should move to the serial package
         port.set_timeout(Duration::new(0,0));
         let mut buf = Vec::new();
         port.read_to_end(&mut buf);
         port.set_timeout(Duration::from_millis(500));
-        Kerbo { control_port : port, turntable_position : 0 }
+        Ok(Kerbo { control_port : port, turntable_position : 0 as u16 })
     }
 
+    pub fn new_from_portname<T: AsRef<OsStr> + ?Sized>(portname: &T) -> serial::Result<Kerbo> {
+        serial::open("/dev/ttyACM0").and_then(|mut port| Kerbo::new_from_port(port))
+    }
+    
     fn wait_for_ok(&mut self, millis : u64) -> serial::Result<()> {
         let mut remainder = millis;
         let step_ms : u64 = 1;
@@ -72,13 +77,13 @@ impl Kerbo {
 }
 
 fn main() {
-    let mut k = Kerbo::new(serial::open("/dev/ttyACM0").unwrap());
-    k.laser(Side::Left, true);
+    let mut k = Kerbo::new_from_portname("/dev/ttyACM0").unwrap();
+    k.laser(Side::Left, true).unwrap();
     thread::sleep(Duration::from_millis(500));
-    k.laser(Side::Left, false);
-    k.laser(Side::Right, true);
+    k.laser(Side::Left, false).unwrap();
+    k.laser(Side::Right, true).unwrap();
     thread::sleep(Duration::from_millis(500));
-    k.laser(Side::Right, false);
-    k.go_to_position(100);
-    k.go_to_position(0);
+    k.laser(Side::Right, false).unwrap();
+    k.go_to_position(100).unwrap();
+    k.go_to_position(0).unwrap();
 }
