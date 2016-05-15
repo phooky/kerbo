@@ -1,7 +1,7 @@
 extern crate serial;
 
-use std::io::Write;
-use std::io::Read;
+use std::io::{Read,Write};
+use std::io;
 use std::time::Duration;
 use std::thread;
 use serial::SerialPort;
@@ -25,7 +25,7 @@ struct Kerbo {
 #[derive (Debug)]
 enum KerboError {
     Serial(serial::Error),
-    Io(std::io::Error),
+    Io(io::Error),
     Protocol(String),
 }
 
@@ -52,13 +52,23 @@ impl Kerbo {
         Kerbo::new_from_port(port)
     }
 
+    
+    fn non_blocking_read(&mut self, buf : &mut Vec<u8>) -> Result<()> {
+        match self.control_port.read_to_end(buf) {
+            Ok(_) => Err(KerboError::Io(io::Error::new(io::ErrorKind::UnexpectedEof,"Port closed!"))),
+            Err(e) => match e.kind() {
+                io::ErrorKind::TimedOut => Ok(()),
+                _ => Err(KerboError::Io(e)),
+            }
+        }        
+    }
+
     /// Flush serial port of any buffered input. This should ideally be implemented
     /// in the serial crate.
     pub fn flush_port_input(&mut self) -> Result<()> {
         try_serial!(self.control_port.set_timeout(Duration::new(0,0)));
         let mut buf = Vec::new();
-        try_io!(self.control_port.read_to_end(&mut buf)); // discarded
-        Ok(())
+        self.non_blocking_read(&mut buf)
     }
 
     /// Wait for an OK message (newline terminated), or error.
@@ -69,7 +79,7 @@ impl Kerbo {
         try_serial!(self.control_port.set_timeout(timeout));
         let mut buf = Vec::new();
         while remainder >= step_ms {
-            try_io!(self.control_port.read_to_end(&mut buf));
+            try!(self.non_blocking_read(&mut buf));
             // the clone call below is clumsy. Ask some rustaceans how to get around it.
             if let Some(c) = buf.last() {
                 if *c == (b'\n' as u8) {
@@ -118,7 +128,10 @@ impl Kerbo {
 
 fn main() {
     let mut k = Kerbo::new_from_portname("/dev/ttyACM0").unwrap();
+    println!("Flushing port...");
     k.flush_port_input().unwrap();
+    println!("Flushed port.");
+    k.laser(Side::Left, false).unwrap();
     k.laser(Side::Left, true).unwrap();
     thread::sleep(Duration::from_millis(500));
     k.laser(Side::Left, false).unwrap();
