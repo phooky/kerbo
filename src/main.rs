@@ -7,10 +7,10 @@ use std::io;
 use std::time::Duration;
 use std::thread;
 use serial::SerialPort;
-use std::ffi::OsStr;
 
 // Lasers are mounted on either side of the camera. "Left" and "Right"
 // here refer to the camera's point of view, not the user's!
+#[derive (Copy, Clone)]
 enum Side {
     Left,
     Right,
@@ -129,19 +129,42 @@ impl Kerbo {
 
     pub fn go_to_position(&mut self, position : u16) -> Result<u16> {
         let offset = position as i32 - self.turntable_position as i32;
-        let offset_str = offset.to_string();
-        let cmd = if offset < 0 {
-            offset_str
-        } else {
-            "+".to_string() + &offset_str
-        } + "\n";
+        if offset == 0 { return Ok(position); }
+        let cmd = format!("{:+x}\n",offset);
         println!("{:?}",cmd);
         try_io!(self.control_port.write(cmd.as_bytes()));
-        try!(self.wait_for_ok(offset.abs() as u64 * 10));
+        try!(self.wait_for_ok( (offset.abs() as u64 * 10) + 10));
         self.turntable_position = position;
         Ok(position)
     }
 
+    pub fn scan_at(&mut self, position : u16, file_root : &str, side : Option<Side>) {
+        self.go_to_position(position).unwrap();
+        match side { Some(x) => self.laser(x, true).unwrap(), None => () }
+        thread::sleep(Duration::from_millis(50));
+        let frame = self.capture_frame().unwrap();
+        let path = format!("{}{:4x}{}.yuv",
+                           file_root.to_string(),
+                           position,
+                           match side {
+                               None => "N",
+                               Some(Side::Left) => "L",
+                               Some(Side::Right) => "R", });
+        let mut file = std::fs::File::create(path).unwrap();
+        match side { Some(x) => self.laser(x, false).unwrap(), None => () }
+        file.write_all(&frame[..]).unwrap();
+    }
+
+    pub fn scan(&mut self, file_root : &str, increment : u16) {
+        let mut pos = 0;
+        while pos < 0x1900 {
+            println!("scan at {:4x}",pos);
+            self.scan_at(pos, file_root, None);
+            self.scan_at(pos, file_root, Some(Side::Left));
+            self.scan_at(pos, file_root, Some(Side::Right));
+            pos = pos + increment;
+        }
+    }
 }
 
 fn main() {
@@ -151,25 +174,5 @@ fn main() {
     println!("Flushed port.");
     k.laser(Side::Left, false).unwrap();
     k.laser(Side::Right, false).unwrap();
-    k.laser(Side::Left, true).unwrap();
-    {
-        thread::sleep(Duration::from_millis(50));
-        let frame = k.capture_frame().unwrap();
-        let mut file = std::fs::File::create(&format!("Left.yuv")).unwrap();
-        file.write_all(&frame[..]).unwrap();
-    }
-    k.laser(Side::Left, false).unwrap();
-    k.laser(Side::Right, true).unwrap();
-    {
-        thread::sleep(Duration::from_millis(50));
-        let frame = k.capture_frame().unwrap();
-        let mut file = std::fs::File::create(&format!("Right.yuv")).unwrap();
-        file.write_all(&frame[..]).unwrap();
-    }
-    //thread::sleep(Duration::from_millis(500));
-    k.laser(Side::Right, false).unwrap();
-    println!("Go to position 500");
-    //k.go_to_position(500).unwrap();
-    println!("Go to position 0");
-    //k.go_to_position(0).unwrap();
+    k.scan("test_scan",64);
 }
