@@ -19,7 +19,7 @@ enum Side {
 struct Kerbo {
     control_port : serial::SystemPort,
     turntable_position : u16,
-    camera : Camera,
+    camera_path : String,
 }
 
 /// KerboError is an error enumeration which encompasses both
@@ -46,24 +46,28 @@ macro_rules! try_io {
 
 impl Kerbo {
 
-    pub fn new_from_port(port : serial::SystemPort) -> Result<Kerbo> {
-        let mut cam = Camera::new("/dev/video1").unwrap();
+    pub fn new_from_port
+        (port : serial::SystemPort, cam_path : &str) -> Result<Kerbo> {
+        Ok(Kerbo { control_port : port,
+                  turntable_position : 0 as u16,
+                  camera_path : cam_path.to_string() })
+    }
+
+    pub fn new_from_portname
+        (portname: &str, cam_path : &str) -> Result<Kerbo> {
+        let port = try_serial!(serial::open(portname));
+        Kerbo::new_from_port(port, cam_path)
+    }
+
+    pub fn capture_frame(&mut self) -> Result<rscam::Frame> {
+        let mut cam = Camera::new(self.camera_path.as_str()).unwrap();
         cam.start(&Config {
             interval: (2,15), // 7.5fps
             resolution: (1280, 1024),
             format: b"YUYV",
             .. Default::default() }).unwrap();
-        Ok(Kerbo { control_port : port, turntable_position : 0 as u16, camera : cam })
-    }
-
-    pub fn new_from_portname<T: AsRef<OsStr> + ?Sized>(portname: &T) -> Result<Kerbo> {
-        let port = try_serial!(serial::open(portname));
-        Kerbo::new_from_port(port)
-    }
-
-    pub fn capture_frame(&mut self) -> Result<rscam::Frame> {
-        let frame = self.camera.capture();
-        //self.camera.stop().unwrap();
+        let frame = cam.capture();
+        cam.stop().unwrap();
         frame.map_err(|err| KerboError::Io(err))
     }
     
@@ -137,22 +141,22 @@ impl Kerbo {
         self.turntable_position = position;
         Ok(position)
     }
-    
+
 }
 
 fn main() {
-    let mut k = Kerbo::new_from_portname("/dev/ttyACM0").unwrap();
+    let mut k = Kerbo::new_from_portname("/dev/ttyACM0","/dev/video1").unwrap();
     println!("Flushing port...");
     k.flush_port_input().unwrap();
     println!("Flushed port.");
     k.laser(Side::Left, false).unwrap();
+    k.laser(Side::Right, false).unwrap();
     k.laser(Side::Left, true).unwrap();
     {
         thread::sleep(Duration::from_millis(50));
         let frame = k.capture_frame().unwrap();
         let mut file = std::fs::File::create(&format!("Left.yuv")).unwrap();
         file.write_all(&frame[..]).unwrap();
-        thread::sleep(Duration::from_millis(50));
     }
     k.laser(Side::Left, false).unwrap();
     k.laser(Side::Right, true).unwrap();
@@ -161,12 +165,11 @@ fn main() {
         let frame = k.capture_frame().unwrap();
         let mut file = std::fs::File::create(&format!("Right.yuv")).unwrap();
         file.write_all(&frame[..]).unwrap();
-        thread::sleep(Duration::from_millis(50));
     }
     //thread::sleep(Duration::from_millis(500));
     k.laser(Side::Right, false).unwrap();
     println!("Go to position 500");
-    k.go_to_position(500).unwrap();
+    //k.go_to_position(500).unwrap();
     println!("Go to position 0");
-    k.go_to_position(0).unwrap();
+    //k.go_to_position(0).unwrap();
 }
