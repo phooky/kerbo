@@ -1,5 +1,7 @@
 extern crate serial;
+extern crate rscam;
 
+use rscam::{Camera, Config};
 use std::io::{Read,Write};
 use std::io;
 use std::time::Duration;
@@ -17,6 +19,7 @@ enum Side {
 struct Kerbo {
     control_port : serial::SystemPort,
     turntable_position : u16,
+    camera : Camera,
 }
 
 /// KerboError is an error enumeration which encompasses both
@@ -44,7 +47,13 @@ macro_rules! try_io {
 impl Kerbo {
 
     pub fn new_from_port(port : serial::SystemPort) -> Result<Kerbo> {
-        Ok(Kerbo { control_port : port, turntable_position : 0 as u16 })
+        let mut cam = Camera::new("/dev/video1").unwrap();
+        cam.start(&Config {
+            interval: (2,15), // 7.5fps
+            resolution: (1280, 1024),
+            format: b"YUYV",
+            .. Default::default() }).unwrap();
+        Ok(Kerbo { control_port : port, turntable_position : 0 as u16, camera : cam })
     }
 
     pub fn new_from_portname<T: AsRef<OsStr> + ?Sized>(portname: &T) -> Result<Kerbo> {
@@ -52,6 +61,11 @@ impl Kerbo {
         Kerbo::new_from_port(port)
     }
 
+    pub fn capture_frame(&mut self) -> Result<rscam::Frame> {
+        let frame = self.camera.capture();
+        //self.camera.stop().unwrap();
+        frame.map_err(|err| KerboError::Io(err))
+    }
     
     fn non_blocking_read(&mut self, buf : &mut Vec<u8>) -> Result<()> {
         match self.control_port.read_to_end(buf) {
@@ -119,7 +133,7 @@ impl Kerbo {
         } + "\n";
         println!("{:?}",cmd);
         try_io!(self.control_port.write(cmd.as_bytes()));
-        try!(self.wait_for_ok(3000));
+        try!(self.wait_for_ok(offset.abs() as u64 * 10));
         self.turntable_position = position;
         Ok(position)
     }
@@ -133,13 +147,26 @@ fn main() {
     println!("Flushed port.");
     k.laser(Side::Left, false).unwrap();
     k.laser(Side::Left, true).unwrap();
-    thread::sleep(Duration::from_millis(500));
+    {
+        thread::sleep(Duration::from_millis(50));
+        let frame = k.capture_frame().unwrap();
+        let mut file = std::fs::File::create(&format!("Left.yuv")).unwrap();
+        file.write_all(&frame[..]).unwrap();
+        thread::sleep(Duration::from_millis(50));
+    }
     k.laser(Side::Left, false).unwrap();
     k.laser(Side::Right, true).unwrap();
-    thread::sleep(Duration::from_millis(500));
+    {
+        thread::sleep(Duration::from_millis(50));
+        let frame = k.capture_frame().unwrap();
+        let mut file = std::fs::File::create(&format!("Right.yuv")).unwrap();
+        file.write_all(&frame[..]).unwrap();
+        thread::sleep(Duration::from_millis(50));
+    }
+    //thread::sleep(Duration::from_millis(500));
     k.laser(Side::Right, false).unwrap();
-    println!("Go to position 1000");
-    k.go_to_position(100).unwrap();
+    println!("Go to position 500");
+    k.go_to_position(500).unwrap();
     println!("Go to position 0");
     k.go_to_position(0).unwrap();
 }

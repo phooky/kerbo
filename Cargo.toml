@@ -5,3 +5,4 @@ authors = ["Adam Mayer <phooky@gmail.com>"]
 
 [dependencies]
 serial="0.3.3"
+rscam = "0.5.3"
