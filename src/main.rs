@@ -8,6 +8,8 @@ use std::time::Duration;
 use std::thread;
 use serial::SerialPort;
 
+mod preprocess;
+
 // Lasers are mounted on either side of the camera. "Left" and "Right"
 // here refer to the camera's point of view, not the user's!
 #[derive (Copy, Clone)]
