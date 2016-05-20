@@ -9,6 +9,7 @@ use std::thread;
 use serial::SerialPort;
 
 mod preprocess;
+mod img_proc;
 
 // Lasers are mounted on either side of the camera. "Left" and "Right"
 // here refer to the camera's point of view, not the user's!
