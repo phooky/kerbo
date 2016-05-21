@@ -1,68 +1,38 @@
 
-use std::ops::Index;
+use std::ops::Sub;
+use std::clone::Clone;
 
 type Pixel = u8;
 
-trait Image<P> : Index<(usize,usize),Output=P> {
-    fn origin(&self) -> (usize, usize);
-    fn size(&self) -> (usize, usize);
-    fn sub_image(&self, origin : (usize, usize), size : (usize, usize)) -> &Image<P,Output=P>;
-}
-
-struct MemImage<'a,P:'a> {
+struct MemImage<P> {
     size : (usize, usize),
-    data : &'a [P],
+    data : Vec<P>,
     stride : usize,
 }
 
-impl<'a,P> Image<P> for MemImage<'a,P> {
-    fn origin(&self) -> (usize, usize) { (0,0) }
-    fn size(&self) -> (usize, usize) { self.size }
-    fn sub_image(&self, origin:(usize,usize), size:(usize,usize)) -> &Image<P,Output=P> {
-        let (ox, oy) = origin;
-        let offset = oy * self.stride + ox;
-        &SliceImage { size : size,
-                    data : &self.data[offset..],
-                    origin : origin,
-                    stride : self.stride } }
-}
-
-impl<'a,P> Index<(usize,usize)> for MemImage<'a,P> {
-    type Output = P;
-    fn index<'b>(&'b self, location : (usize,usize)) -> &'b P {
-        let (x,y) = location;
-        let offset = y * self.stride + x;
-        self.data[offset]
+impl<P : Sub<P,Output=P> + Clone > MemImage<P> {
+    fn subtract(&mut self, other : MemImage<P>) {
+        let mut o = other.data.iter();
+        for p in self.data.iter_mut() {
+            match o.next() {
+                Some(d) => {
+                    let v = p.clone().sub(d.clone());
+                    *p = v;
+                },
+                None => break,
+            }
+        }
     }
 }
 
-struct SliceImage<'a,P:'a> {
-    size : (usize, usize),
-    data : &'a [P],
-    origin : (usize, usize),
-    stride : usize,
+#[test]
+fn test_image_sub() {
+    let mut a = MemImage{ size: (3, 3),
+                     data : vec![9, 8, 7, 8, 7, 6, 7, 6, 5],
+                     stride : 3 };
+    let b = MemImage{ size: (3, 3),
+                     data : vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
+                     stride : 3 };
+    a.subtract(b);
+    assert_eq!( a.data, vec![8,6,4,4,2,0,0,-2,-4]);
 }
-
-impl<'a,P> Image<P> for SliceImage<'a,P> {
-    fn origin(&self) -> (usize, usize) { self.origin }
-    fn size(&self) -> (usize, usize) { self.size }
-    fn sub_image(&self, origin:(usize,usize), size:(usize,usize)) -> &Image<P,Output=P> {
-        let (ox, oy) = origin;
-        let offset = oy * self.stride + ox;
-        &SliceImage { size : size,
-                    data : &self.data[offset..],
-                    origin : origin,
-                    stride : self.stride } }
-}
-
-impl<'a,P> Index<(usize,usize)> for SliceImage<'a,P> {
-    type Output = P;
-    fn index<'b>(&'b self, location : (usize,usize)) -> &'b P {
-        let (x,y) = location;
-        let offset = y * self.stride + x;
-        self.data[offset]
-    }
-}
-
-//impl<P> Image {
-//    pub fn sub_image(&self, origin : (usize, usize), size : (usize, usize)
