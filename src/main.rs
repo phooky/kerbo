@@ -192,6 +192,19 @@ fn main() {
         k.laser(Side::Right, false).unwrap();
         k.scan("test_scan",64);
     } else if args.get_bool("process") {
-        println!("Processing {}",args.get_str("<scan-dir>"));
+        // process existing scans
+        let path = args.get_str("<scan-dir>");
+        let mut contents = std::fs::read_dir(path).unwrap()
+            .map(|x| x.unwrap().path())
+            .collect::<Vec<std::path::PathBuf>>();
+        contents.sort();
+        let mut paths = contents.as_slice();
+        while paths.len() >= 3 {
+            let (l, n, r) = (paths[0].to_str().unwrap(),
+                             paths[1].to_str().unwrap(),
+                             paths[2].to_str().unwrap());
+            paths = &paths[3..];
+            println!("process {} {} {}",l,n,r);
+        }
     }
 }
