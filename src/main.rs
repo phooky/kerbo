@@ -1,5 +1,6 @@
 extern crate serial;
 extern crate rscam;
+extern crate docopt;
 
 use rscam::{Camera, Config};
 use std::io::{Read,Write};
@@ -7,9 +8,16 @@ use std::io;
 use std::time::Duration;
 use std::thread;
 use serial::SerialPort;
+use docopt::Docopt;
 
 mod preprocess;
 mod img_proc;
+
+
+const USAGE: &'static str = "
+Usage: kerbo scan <scan-dir>
+       kerbo process <scan-dir>
+";
 
 // Lasers are mounted on either side of the camera. "Left" and "Right"
 // here refer to the camera's point of view, not the user's!
@@ -171,11 +179,19 @@ impl Kerbo {
 }
 
 fn main() {
-    let mut k = Kerbo::new_from_portname("/dev/ttyACM0","/dev/video1").unwrap();
-    println!("Flushing port...");
-    k.flush_port_input().unwrap();
-    println!("Flushed port.");
-    k.laser(Side::Left, false).unwrap();
-    k.laser(Side::Right, false).unwrap();
-    k.scan("test_scan",64);
+    let argv = std::env::args();
+    let args = Docopt::new(USAGE)
+        .and_then(|d| d.argv(argv.into_iter()).parse())
+        .unwrap_or_else(|e| e.exit());
+    if args.get_bool("scan") {
+        let mut k = Kerbo::new_from_portname("/dev/ttyACM0","/dev/video1").unwrap();
+        println!("Flushing port...");
+        k.flush_port_input().unwrap();
+        println!("Flushed port.");
+        k.laser(Side::Left, false).unwrap();
+        k.laser(Side::Right, false).unwrap();
+        k.scan("test_scan",64);
+    } else if args.get_bool("process") {
+        println!("Processing {}",args.get_str("<scan-dir>"));
+    }
 }
