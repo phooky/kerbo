@@ -54,11 +54,11 @@ type Result<T> = std::result::Result<T,KerboError>;
 
 
 macro_rules! try_serial {
-    ( $x:expr ) => (try!($x.map_err(|err| KerboError::Serial(err))));
+    ( $x:expr ) => (try!($x.map_err(KerboError::Serial)));
 }
 
 macro_rules! try_io {
-    ( $x:expr ) => (try!($x.map_err(|err| KerboError::Io(err))));
+    ( $x:expr ) => (try!($x.map_err(KerboError::Io)));
 }
 
 impl Kerbo {
@@ -85,7 +85,7 @@ impl Kerbo {
             .. Default::default() }).unwrap();
         let frame = cam.capture();
         cam.stop().unwrap();
-        frame.map_err(|err| KerboError::Io(err))
+        frame.map_err(KerboError::Io)
     }
     
     fn non_blocking_read(&mut self, buf : &mut Vec<u8>) -> Result<()> {
