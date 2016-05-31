@@ -39,6 +39,9 @@ struct Kerbo {
     camera_path : String,
 }
 
+use std::error;
+use std::fmt;
+
 /// KerboError is an error enumeration which encompasses both
 /// serial port errors emitted by the serial crate, and protocol
 /// errors emitted by the Kerbo itself.
@@ -49,17 +52,22 @@ enum KerboError {
     Protocol(String),
 }
 
+impl From<serial::Error> for KerboError {
+    fn from(err : serial::Error) -> KerboError { KerboError::Serial(err) }
+}
+
+impl From<io::Error> for KerboError {
+    fn from(err : io::Error) -> KerboError { KerboError::Io(err) }
+}
+
+// impl fmt::Display for KerboError {    
+// }
+
+// impl error::Error for KerboError {
+// }
+
 /// kerbo results default to KerboError as their error type
 type Result<T> = std::result::Result<T,KerboError>;
-
-
-macro_rules! try_serial {
-    ( $x:expr ) => (try!($x.map_err(KerboError::Serial)));
-}
-
-macro_rules! try_io {
-    ( $x:expr ) => (try!($x.map_err(KerboError::Io)));
-}
 
 impl Kerbo {
 
@@ -72,7 +80,7 @@ impl Kerbo {
 
     pub fn new_from_portname
         (portname: &str, cam_path : &str) -> Result<Kerbo> {
-        let port = try_serial!(serial::open(portname));
+        let port = try!(serial::open(portname));
         Kerbo::new_from_port(port, cam_path)
     }
 
@@ -101,7 +109,7 @@ impl Kerbo {
     /// Flush serial port of any buffered input. This should ideally be implemented
     /// in the serial crate.
     pub fn flush_port_input(&mut self) -> Result<()> {
-        try_serial!(self.control_port.set_timeout(Duration::new(0,0)));
+        try!(self.control_port.set_timeout(Duration::new(0,0)));
         let mut buf = Vec::new();
         self.non_blocking_read(&mut buf)
     }
@@ -111,7 +119,7 @@ impl Kerbo {
         let mut remainder = timeout_ms;
         let step_ms : u64 = 1; // ms per polling read
         let timeout = Duration::from_millis(step_ms);
-        try_serial!(self.control_port.set_timeout(timeout));
+        try!(self.control_port.set_timeout(timeout));
         let mut buf = Vec::new();
         while remainder >= step_ms {
             try!(self.non_blocking_read(&mut buf));
@@ -140,7 +148,7 @@ impl Kerbo {
             true => "ff",
             false => "00",
         } + "\n";
-        try_io!(self.control_port.write(cmd.as_bytes()));
+        try!(self.control_port.write(cmd.as_bytes()));
         self.wait_for_ok(5)
     }
 
@@ -149,7 +157,7 @@ impl Kerbo {
         if offset == 0 { return Ok(position); }
         let cmd = format!("{:+x}\n",offset);
         println!("{:?}",cmd);
-        try_io!(self.control_port.write(cmd.as_bytes()));
+        try!(self.control_port.write(cmd.as_bytes()));
         try!(self.wait_for_ok( (offset.abs() as u64 * 10) + 10));
         self.turntable_position = position;
         Ok(position)
