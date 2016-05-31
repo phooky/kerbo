@@ -9,19 +9,25 @@ use std::time::Duration;
 use std::thread;
 use serial::SerialPort;
 use docopt::Docopt;
+use regex::Regex;
 
 mod preprocess;
 mod img_proc;
 
 
 const USAGE: &'static str = "
-Usage: kerbo scan <scan-dir>
-       kerbo process <scan-dir>
+Usage: kerbo scan [options]
+
+Options:
+  -h, --help
+  --serial=<port>     Use the specified serial device. [default: /dev/ttyACM0]
+  --video=<video>     Use the specified video device.  [default: /dev/video1]
+  --scan-data=<path>  Bypass hardware and use the scan files in the given directory.
 ";
 
 // Lasers are mounted on either side of the camera. "Left" and "Right"
 // here refer to the camera's point of view, not the user's!
-#[derive (Copy, Clone)]
+#[derive (Copy, Clone, Debug)]
 enum Side {
     Left,
     Right,
@@ -178,13 +184,39 @@ impl Kerbo {
     }
 }
 
+#[macro_use] extern crate lazy_static;
+extern crate regex;
+
+fn parse_scan_path(path : &str) -> Option<(u16, Option<Side>)> {
+    lazy_static! {
+        static ref RE : Regex = Regex::new(r"([a-f0-9]{4})([NLR])\.yuv$").unwrap();
+    }
+    match RE.captures(path) {
+        None => None,
+        Some(caps) => {
+            let num = u16::from_str_radix(caps.at(1).unwrap(),16).unwrap();
+            let sidestr = caps.at(2).unwrap();
+            match sidestr {
+                "L" => Some( (num,Some(Side::Left)) ),
+                "R" => Some( (num,Some(Side::Right)) ),
+                "N" => Some( (num,None) ),
+                _ => None
+            }
+        }
+    }
+}
+
+use std::collections::HashMap;
+
 fn main() {
     let argv = std::env::args();
     let args = Docopt::new(USAGE)
         .and_then(|d| d.argv(argv.into_iter()).parse())
         .unwrap_or_else(|e| e.exit());
     if args.get_bool("scan") {
-        let mut k = Kerbo::new_from_portname("/dev/ttyACM0","/dev/video1").unwrap();
+        let port_path = args.get_str("<port>");
+        let video_path = args.get_str("<video>");
+        let mut k = Kerbo::new_from_portname(port_path,video_path).unwrap();
         println!("Flushing port...");
         k.flush_port_input().unwrap();
         println!("Flushed port.");
@@ -194,9 +226,35 @@ fn main() {
     } else if args.get_bool("process") {
         // process existing scans
         let path = args.get_str("<scan-dir>");
+        struct ImgSet {
+            l : Option<String>,
+            r : Option<String>,
+            n : Option<String>,
+        };
+        /*
+        let mut image_map = HashMap::<u16,ImgSet>::new();
         let mut contents = std::fs::read_dir(path).unwrap()
-            .map(|x| x.unwrap().path())
-            .collect::<Vec<std::path::PathBuf>>();
+            .map(|x| x.unwrap().path().to_str().unwrap());
+        for p in contents {
+            match parse_scan_path(p) {
+                Some( (num, side) ) => {
+                    println!("{} {:?}",num,side);
+                    let mut e = match image_map.get_mut(&num) {
+                        None => { let mut v = ImgSet { l : None, r : None, n : None };
+                                  image_map.insert(num, v);
+                                  image_map.get_mut(&num).unwrap() },
+                        Some(v) => v };
+                    match side {
+                        None => e.n = Some(p.to_string()),
+                        Some(Side::Left) => e.l = Some(p.to_string()),
+                        Some(Side::Right) => e.r = Some(p.to_string()),
+                    }
+                },
+                None => (),
+            }
+        }
+*/
+        /*
         contents.sort();
         let mut paths = contents.as_slice();
         while paths.len() >= 3 {
@@ -204,7 +262,8 @@ fn main() {
                              paths[1].to_str().unwrap(),
                              paths[2].to_str().unwrap());
             paths = &paths[3..];
-            println!("process {} {} {}",l,n,r);
+            println!("process {} {} {} {:?}",l,n,r,parse_scan_path(l));
         }
+*/
     }
 }
