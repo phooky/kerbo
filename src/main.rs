@@ -1,3 +1,4 @@
+#![allow(dead_code,unused_imports)]
 extern crate serial;
 extern crate rscam;
 extern crate docopt;
@@ -16,13 +17,15 @@ mod img_proc;
 
 
 const USAGE: &'static str = "
-Usage: kerbo scan [options]
+Usage: kerbo [options]
 
 Options:
   -h, --help
   --serial=<port>     Use the specified serial device. [default: /dev/ttyACM0]
   --video=<video>     Use the specified video device.  [default: /dev/video1]
-  --scan-data=<path>  Bypass hardware and use the scan files in the given directory.
+  --scan-data=<path>  Place/use the raw scan files in the given directory. [default: ./scan-data/]
+  --skip-scan         Bypass the physical scanning step and use the data provided
+                      by the last scan.
 ";
 
 // Lasers are mounted on either side of the camera. "Left" and "Right"
@@ -221,7 +224,8 @@ fn main() {
     let args = Docopt::new(USAGE)
         .and_then(|d| d.argv(argv.into_iter()).parse())
         .unwrap_or_else(|e| e.exit());
-    if args.get_bool("scan") {
+    let scan_path = args.get_str("--scan-data");
+    if !args.get_bool("--skip-scan") {
         let port_path = args.get_str("<port>");
         let video_path = args.get_str("<video>");
         let mut k = Kerbo::new_from_portname(port_path,video_path).unwrap();
@@ -230,48 +234,42 @@ fn main() {
         println!("Flushed port.");
         k.laser(Side::Left, false).unwrap();
         k.laser(Side::Right, false).unwrap();
-        k.scan("test_scan",64);
-    } else if args.get_bool("process") {
-        // process existing scans
-        let path = args.get_str("<scan-dir>");
-        struct ImgSet {
-            l : Option<String>,
-            r : Option<String>,
-            n : Option<String>,
-        };
-        /*
-        let mut image_map = HashMap::<u16,ImgSet>::new();
-        let mut contents = std::fs::read_dir(path).unwrap()
-            .map(|x| x.unwrap().path().to_str().unwrap());
-        for p in contents {
-            match parse_scan_path(p) {
-                Some( (num, side) ) => {
-                    println!("{} {:?}",num,side);
-                    let mut e = match image_map.get_mut(&num) {
-                        None => { let mut v = ImgSet { l : None, r : None, n : None };
-                                  image_map.insert(num, v);
-                                  image_map.get_mut(&num).unwrap() },
-                        Some(v) => v };
-                    match side {
-                        None => e.n = Some(p.to_string()),
-                        Some(Side::Left) => e.l = Some(p.to_string()),
-                        Some(Side::Right) => e.r = Some(p.to_string()),
-                    }
-                },
-                None => (),
-            }
-        }
-*/
-        /*
-        contents.sort();
-        let mut paths = contents.as_slice();
-        while paths.len() >= 3 {
-            let (l, n, r) = (paths[0].to_str().unwrap(),
-                             paths[1].to_str().unwrap(),
-                             paths[2].to_str().unwrap());
-            paths = &paths[3..];
-            println!("process {} {} {} {:?}",l,n,r,parse_scan_path(l));
-        }
-*/
+        let prefix = scan_path.to_string() + "scan";
+        std::fs::create_dir_all(scan_path).unwrap();
+        k.scan(prefix.as_str(),64);
     }
+    println!("Processing scan dir '{}'...",scan_path);
+
+    struct ImgSet {
+        l : Option<String>,
+        r : Option<String>,
+        n : Option<String>,
+    };
+    let mut image_map = HashMap::<u16,ImgSet>::new();
+    for p in std::fs::read_dir(scan_path).unwrap() {
+        let path = p.unwrap().file_name().to_str().unwrap().to_string();
+        match parse_scan_path(path.as_str()) {
+            Some( (num, side) ) => {
+                if !image_map.get(&num).is_some() {
+                    let v = ImgSet { l : None, r : None, n : None };
+                    image_map.insert(num, v);
+                }
+                let mut e = image_map.get_mut(&num).unwrap();
+                match side {
+                    None => e.n = Some(path),
+                    Some(Side::Left) => e.l = Some(path),
+                    Some(Side::Right) => e.r = Some(path),
+                }
+            },
+            None => {
+                println!("Ignoring path {}",path);
+            },
+        }
+    }
+    let complete = image_map.iter()
+        .filter(|&(_,x)| x.l.is_some() && x.r.is_some() && x.n.is_some())
+        .count();
+    let incomplete = image_map.len() - complete;
+    println!("Processing {} complete scan images ({} incomplete).", complete, incomplete);
+
 }
