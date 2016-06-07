@@ -8,6 +8,7 @@ use std::io::{Read,Write};
 use std::io;
 use std::time::Duration;
 use std::thread;
+use std::error::Error;
 use serial::SerialPort;
 use docopt::Docopt;
 use regex::Regex;
@@ -45,6 +46,23 @@ struct Kerbo {
 use std::error;
 use std::fmt;
 
+#[derive (Debug)]
+struct KerboProtocolError {
+    description : String,
+}
+
+impl Error for KerboProtocolError {
+    fn description(&self) -> &str {
+        self.description.as_str()
+    }
+}
+
+impl fmt::Display for KerboProtocolError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description)
+    }
+}
+
 /// KerboError is an error enumeration which encompasses both
 /// serial port errors emitted by the serial crate, and protocol
 /// errors emitted by the Kerbo itself.
@@ -52,7 +70,31 @@ use std::fmt;
 enum KerboError {
     Serial(serial::Error),
     Io(io::Error),
-    Protocol(String),
+    Protocol(KerboProtocolError),
+}
+
+impl Error for KerboError {
+    fn description(&self) -> &str {
+        self.cause().unwrap().description()
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        match *self {
+            KerboError::Serial(e) => Some(&e),
+            KerboError::Io(e) => Some(&e),
+            KerboError::Protocol(e) => Some(&e),
+        }
+    }
+}
+
+impl fmt::Display for KerboError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            KerboError::Serial(e) => write!(f,"Serial port error: {}",e.description()),
+            KerboError::Io(e) => write!(f,"I/O error: {}",e.description()),
+            KerboError::Protocol(e) => write!(f,"Protocol error: {}",e.description()),
+        }
+    }
 }
 
 impl From<serial::Error> for KerboError {
@@ -61,6 +103,11 @@ impl From<serial::Error> for KerboError {
 
 impl From<io::Error> for KerboError {
     fn from(err : io::Error) -> KerboError { KerboError::Io(err) }
+}
+
+impl From<String> for KerboError {
+    fn from(err : String) -> KerboError { KerboError::Protocol(
+        KerboProtocolError{ description : err } ) }
 }
 
 // impl fmt::Display for KerboError {    
@@ -133,14 +180,14 @@ impl Kerbo {
                         return Ok(())
                     } else {
                         let rstr = String::from_utf8(buf.clone()).unwrap_or(String::from("Incomprehensible string"));
-                        return Err(KerboError::Protocol(rstr));
+                        return Err(KerboError::from(rstr));
                     }
                 }
             }
             remainder = remainder - step_ms;
         }
         println!("{:?}",String::from_utf8(buf).unwrap());
-        Err(KerboError::Protocol(String::from("Timeout")))
+        Err(KerboError::from(String::from("Timeout")))
     }
     
     pub fn laser(&mut self, side : Side, on : bool) -> Result<()> {
@@ -226,17 +273,31 @@ fn main() {
         .unwrap_or_else(|e| e.exit());
     let scan_path = args.get_str("--scan-data");
     if !args.get_bool("--skip-scan") {
-        let port_path = args.get_str("<port>");
-        let video_path = args.get_str("<video>");
-        let mut k = Kerbo::new_from_portname(port_path,video_path).unwrap();
-        println!("Flushing port...");
-        k.flush_port_input().unwrap();
-        println!("Flushed port.");
-        k.laser(Side::Left, false).unwrap();
-        k.laser(Side::Right, false).unwrap();
-        let prefix = scan_path.to_string() + "scan";
-        std::fs::create_dir_all(scan_path).unwrap();
-        k.scan(prefix.as_str(),64);
+        let port_path = args.get_str("--serial");
+        let video_path = args.get_str("--video");
+        match Kerbo::new_from_portname(port_path,video_path) {
+            Ok(mut k) => {
+                println!("Flushing port...");
+                k.flush_port_input().unwrap();
+                println!("Flushed port.");
+                k.laser(Side::Left, false).unwrap();
+                k.laser(Side::Right, false).unwrap();
+                let prefix = scan_path.to_string() + "scan";
+                std::fs::create_dir_all(scan_path).unwrap();
+                k.scan(prefix.as_str(),64);
+            },
+            Err(e) => {
+                let stderr = &mut std::io::stderr();
+                let detail = match e {
+                    KerboError::Serial(se) =>
+                        format!("Could not open {}: {}",port_path,se.description()),
+                    KerboError::Io(ioe) => ioe.description().to_string(),
+                    KerboError::Protocol(s) => s.description().to_string(),
+                };
+                writeln!(stderr, "Couldn't connect to Kerbo: {}. Exiting!",detail).unwrap();
+                std::process::exit(1);
+            },
+        }
     }
     println!("Processing scan dir '{}'...",scan_path);
 
