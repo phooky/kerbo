@@ -121,11 +121,20 @@ type Result<T> = std::result::Result<T,KerboError>;
 
 impl Kerbo {
 
-    pub fn new_from_port
-        (port : serial::SystemPort, cam_path : &str) -> Result<Kerbo> {
-        Ok(Kerbo { control_port : port,
-                  turntable_position : 0 as u16,
-                  camera_path : cam_path.to_string() })
+    pub fn new_from_port (port : serial::SystemPort, cam_path : &str) -> Result<Kerbo> {
+        let mut k = Kerbo { control_port : port,
+                            turntable_position : 0 as u16,
+                            camera_path : cam_path.to_string() };
+        k.flush_port_input().unwrap();
+        // Test if this is the correct device by turning off the left laser.
+        match k.laser(Side::Left, false) {
+            Ok(()) => Ok(k),
+            Err(e) => match e {
+                KerboError::Protocol(_) =>
+                    Err(KerboError::from(String::from("Device is not a Kerbo"))),
+                e => Err(e)
+            }
+        }
     }
 
     pub fn new_from_portname
