@@ -47,17 +47,17 @@ use std::error;
 use std::fmt;
 
 #[derive (Debug)]
-struct KerboProtocolError {
+struct ProtocolError {
     description : String,
 }
 
-impl Error for KerboProtocolError {
+impl Error for ProtocolError {
     fn description(&self) -> &str {
         self.description.as_str()
     }
 }
 
-impl fmt::Display for KerboProtocolError {
+impl fmt::Display for ProtocolError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.description)
     }
@@ -70,7 +70,7 @@ impl fmt::Display for KerboProtocolError {
 enum KerboError {
     Serial(serial::Error),
     Io(io::Error),
-    Protocol(KerboProtocolError),
+    Protocol(ProtocolError),
 }
 
 impl Error for KerboError {
@@ -107,7 +107,7 @@ impl From<io::Error> for KerboError {
 
 impl From<String> for KerboError {
     fn from(err : String) -> KerboError { KerboError::Protocol(
-        KerboProtocolError{ description : err } ) }
+        ProtocolError{ description : err } ) }
 }
 
 // impl fmt::Display for KerboError {    
