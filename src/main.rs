@@ -80,9 +80,9 @@ impl Error for KerboError {
 
     fn cause(&self) -> Option<&Error> {
         match *self {
-            KerboError::Serial(e) => Some(&e),
-            KerboError::Io(e) => Some(&e),
-            KerboError::Protocol(e) => Some(&e),
+            KerboError::Serial(ref e) => Some(e),
+            KerboError::Io(ref e) => Some(e),
+            KerboError::Protocol(ref e) => Some(e),
         }
     }
 }
@@ -90,9 +90,9 @@ impl Error for KerboError {
 impl fmt::Display for KerboError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            KerboError::Serial(e) => write!(f,"Serial port error: {}",e.description()),
-            KerboError::Io(e) => write!(f,"I/O error: {}",e.description()),
-            KerboError::Protocol(e) => write!(f,"Protocol error: {}",e.description()),
+            KerboError::Serial(ref e) => write!(f,"Serial port error: {}",e.description()),
+            KerboError::Io(ref e) => write!(f,"I/O error: {}",e.description()),
+            KerboError::Protocol(ref e) => write!(f,"Protocol error: {}",e.description()),
         }
     }
 }
