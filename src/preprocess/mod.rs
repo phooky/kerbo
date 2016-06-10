@@ -31,3 +31,27 @@ pub fn strip_chroma_yuyv<I,J>(source : I) -> ChromaStripIter<I,J> where
     ChromaStripIter { i : source }
 }
 
+use std::io::{stderr,Write};
+
+#[test]
+fn test_chroma_stripper_u8() {
+    let data = vec![1 as u8, 2, 1, 2, 1, 2, 1, 2];
+    let mut i = strip_chroma_yuyv(data.iter());
+    assert_eq!(i.next(), Some(&1));
+    assert_eq!(i.next(), Some(&1));
+    assert_eq!(i.next(), Some(&1));
+    assert_eq!(i.next(), Some(&1));
+    assert_eq!(i.next(), None);
+}
+
+#[test]
+fn test_chroma_stripper_i32() {
+    let data = vec![1 as i32, 2, 1, 2, 1, 2, 1, 2];
+    let mut i = strip_chroma_yuyv(data.iter());
+    assert_eq!(i.next(), Some(&1));
+    assert_eq!(i.next(), Some(&1));
+    assert_eq!(i.next(), Some(&1));
+    assert_eq!(i.next(), Some(&1));
+    assert_eq!(i.next(), None);
+}
+
