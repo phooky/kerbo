@@ -1,17 +1,20 @@
+use std::cmp::PartialEq;
 
 // All of our preprocessing iterators.
 
-pub struct ChromaStripIter<I> where
-    I : Iterator<Item = u8>
+pub struct ChromaStripIter<I,J> where
+    I : Iterator<Item = J>,
+    J : PartialEq
 {
     i : I
 }
 
-impl<I> Iterator for ChromaStripIter<I> where
-    I : Iterator<Item = u8>
+impl<I,J> Iterator for ChromaStripIter<I,J> where
+    I : Iterator<Item = J>,
+    J : PartialEq
 {
-    type Item = u8;
-    fn next(&mut self) -> Option<u8> {
+    type Item = J;
+    fn next(&mut self) -> Option<J> {
         let val = self.i.next();
         if val != None {
             self.i.next(); // discard
@@ -21,8 +24,10 @@ impl<I> Iterator for ChromaStripIter<I> where
 }
 
 /// Strip chroma information from a yuyv image, returning yy (4:2:2->4:0:0)
-pub fn strip_chroma_yuyv<I>(source : I) -> ChromaStripIter<I> where
-    I : Iterator<Item = u8>
+pub fn strip_chroma_yuyv<I,J>(source : I) -> ChromaStripIter<I,J> where
+    I : Iterator<Item = J>,
+    J : PartialEq
 {
     ChromaStripIter { i : source }
 }
+

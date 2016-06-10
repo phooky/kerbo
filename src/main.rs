@@ -340,6 +340,7 @@ fn main() {
         .filter(|&(_,x)| x.l.is_some() && x.r.is_some() && x.n.is_some())
         .count();
     let incomplete = image_map.len() - complete;
-    println!("Processing {} complete scan images ({} incomplete).", complete, incomplete);
+    println!("Found {} complete scan images ({} incomplete).", complete, incomplete);
+    println!("Dumping subtractive images");
 
 }
