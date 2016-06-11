@@ -1,22 +1,24 @@
 use std::cmp::{PartialEq,Ord};
 use std::ops::Sub;
 use std::num::Zero;
+use std::marker::PhantomData;
 
 // All of our preprocessing iterators.
 
-pub struct ChromaStripIter<I,J> where
-    I : Iterator<Item = J>,
-    J : PartialEq
+pub struct ChromaStripIter<'a,I,J> where
+    I : Iterator<Item = &'a J>,
+    J : PartialEq+'a
 {
-    i : I
+    i : I,
+    marker : PhantomData<&'a J>
 }
 
-impl<I,J> Iterator for ChromaStripIter<I,J> where
-    I : Iterator<Item = J>,
-    J : PartialEq
+impl<'a,I,J> Iterator for ChromaStripIter<'a,I,J> where
+    I : Iterator<Item = &'a J>,
+    J : PartialEq+'a
 {
-    type Item = J;
-    fn next(&mut self) -> Option<J> {
+    type Item = &'a J;
+    fn next(&mut self) -> Option<&'a J> {
         let val = self.i.next();
         if val != None {
             self.i.next(); // discard
@@ -26,11 +28,11 @@ impl<I,J> Iterator for ChromaStripIter<I,J> where
 }
 
 /// Strip chroma information from a yuyv image, returning yy (4:2:2->4:0:0)
-pub fn strip_chroma_yuyv<I,J>(source : I) -> ChromaStripIter<I,J> where
-    I : Iterator<Item = J>,
-    J : PartialEq
+pub fn strip_chroma_yuyv<'a,I,J>(source : I) -> ChromaStripIter<'a,I,J> where
+    I : Iterator<Item = &'a J>,
+    J : PartialEq+'a
 {
-    ChromaStripIter { i : source }
+    ChromaStripIter { i : source, marker : PhantomData }
 }
 
 #[test]
@@ -72,18 +74,18 @@ macro_rules! print_err {
 }
 
 
-pub struct SubtractIter<I,J> where
-    I : Iterator<Item = J>,
-    J : Sub<Output=J>+Zero+Ord
-    
+pub struct SubtractIter<'a,I,J> where
+    I : Iterator<Item = &'a J>+'a,
+    J : Sub<Output=J>+Zero+Ord+Clone+'a    
 {
     minuend : I,
-    subtrahend : I
+    subtrahend : I,
+    marker : PhantomData<&'a J>    
 }
 
-impl<I,J> Iterator for SubtractIter<I,J> where
-    I : Iterator<Item = J>,
-    J : Sub<Output=J>+Zero+Ord
+impl<'a,I,J> Iterator for SubtractIter<'a,I,J> where
+    I : Iterator<Item = &'a J>,
+    J : Sub<Output=J>+Zero+Ord+Clone+'a
 {
     type Item = J;
     fn next(&mut self) -> Option<J> {
@@ -93,30 +95,32 @@ impl<I,J> Iterator for SubtractIter<I,J> where
             None => None,
             Some(m) => match s {
                 None => None,
-                Some(s) => Some(if s > m { J::zero() } else { m - s })
+                Some(s) => Some(if s > m { J::zero() } else { m.clone() - s.clone() })
             }
         }
     }
 }
 
-pub fn subtract<I,J>(minuend : I, subtrahend :  I)->SubtractIter<I,J> where
-    I : Iterator<Item=J>,
-    J : Sub<Output=J>+Zero+Ord
+pub fn subtract<'a,I,J>(minuend : I, subtrahend : I)->SubtractIter<'a,I,J> where
+    I : Iterator<Item=&'a J>,
+    J : Sub<Output=J>+Zero+Ord+Clone+'a
 {
-    SubtractIter{ minuend : minuend, subtrahend : subtrahend }
+    SubtractIter{ minuend : minuend,
+                  subtrahend : subtrahend,
+                  marker : PhantomData }
 }
 
 #[test]
 fn test_subtract_u8() {
-    let d1 = [10 as u8, 9, 8, 7, 6, 5];
-    let d2 = [4 as u8, 5, 6, 7, 8, 9];
+    let d1 = vec![10 as u8, 9, 8, 7, 6, 5];
+    let d2 = vec![4 as u8, 5, 6, 7, 8, 9];
     //    let mut i =  d1.iter().zip(d2.iter()).map(|(x,y)| if y>x {u8::zero()} else {x-y});
     let mut i = subtract(d1.iter(),d2.iter());
-    // assert_eq!(i.next(), Some(6));
-    // assert_eq!(i.next(), Some(4));
-    // assert_eq!(i.next(), Some(2));
-    // assert_eq!(i.next(), Some(0));
-    // assert_eq!(i.next(), Some(0));
-    // assert_eq!(i.next(), Some(0));
-    // assert_eq!(i.next(), None);
+    assert_eq!(i.next(), Some(6));
+    assert_eq!(i.next(), Some(4));
+    assert_eq!(i.next(), Some(2));
+    assert_eq!(i.next(), Some(0));
+    assert_eq!(i.next(), Some(0));
+    assert_eq!(i.next(), Some(0));
+    assert_eq!(i.next(), None);
 }
