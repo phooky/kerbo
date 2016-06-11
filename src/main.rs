@@ -1,3 +1,4 @@
+#![feature(zero_one)]
 #![allow(dead_code,unused_imports)]
 extern crate serial;
 extern crate rscam;
