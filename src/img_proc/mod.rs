@@ -4,13 +4,14 @@ use std::clone::Clone;
 
 type Pixel = u8;
 
+#[derive(Clone)]
 pub struct MemImage<P> {
     size : (usize, usize),
     data : Vec<P>,
     stride : usize,
 }
 
-impl<P> MemImage<P> {
+impl<P> MemImage<P> where P : Sub<P,Output=P> {
     pub fn from_iterator<I>(i : I, sz : (usize, usize) ) -> MemImage<P>
         where I : Iterator<Item=P>
     {
@@ -21,7 +22,7 @@ impl<P> MemImage<P> {
 }
 
 impl<P : Sub<P,Output=P> + Clone > MemImage<P> {
-    pub fn subtract(&mut self, other : MemImage<P>) {
+    pub fn subtract(&mut self, other : &MemImage<P>) {
         let mut o = other.data.iter();
         for p in self.data.iter_mut() {
             match o.next() {
@@ -32,6 +33,15 @@ impl<P : Sub<P,Output=P> + Clone > MemImage<P> {
                 None => break,
             }
         }
+    }
+}
+
+impl<'a, P : Sub<P,Output=P> + Clone > Sub for &'a MemImage<P> {
+    type Output = MemImage<P>;
+    fn sub(self, other : Self) -> MemImage<P> {
+        let mut rv = self.clone();
+        rv.subtract(other);
+        rv
     }
 }
 

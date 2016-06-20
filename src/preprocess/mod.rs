@@ -57,23 +57,6 @@ fn test_chroma_stripper_i32() {
     assert_eq!(i.next(), None);
 }
 
-use std::iter::{Map,Zip};
-
-
-macro_rules! print_err {
-    ($($arg:tt)*) => (
-        {
-            use std::io::prelude::*;
-            if let Err(e) = write!(&mut ::std::io::stderr(), "{}\n", format_args!($($arg)*)) {
-                panic!("Failed to write to stderr.\
-                    \nOriginal error output: {}\
-                    \nSecondary error writing to stderr: {}", format!($($arg)*), e);
-            }
-        }
-    )
-}
-
-
 pub struct SubtractIter<'a,I,J> where
     I : Iterator<Item = &'a J>+'a,
     J : Sub<Output=J>+Zero+Ord+Clone+'a    
@@ -114,6 +97,22 @@ pub fn subtract<'a,I,J>(minuend : I, subtrahend : I)->SubtractIter<'a,I,J> where
 fn test_subtract_u8() {
     let d1 = vec![10 as u8, 9, 8, 7, 6, 5];
     let d2 = vec![4 as u8, 5, 6, 7, 8, 9];
+    //    let mut i =  d1.iter().zip(d2.iter()).map(|(x,y)| if y>x {u8::zero()} else {x-y});
+    let mut i = subtract(d1.iter(),d2.iter());
+    assert_eq!(i.next(), Some(6));
+    assert_eq!(i.next(), Some(4));
+    assert_eq!(i.next(), Some(2));
+    assert_eq!(i.next(), Some(0));
+    assert_eq!(i.next(), Some(0));
+    assert_eq!(i.next(), Some(0));
+    assert_eq!(i.next(), None);
+}
+
+
+#[test]
+fn test_subtract_i32() {
+    let d1 = vec![10 as i32, 9, 8, 7, 6, 5];
+    let d2 = vec![4 as i32, 5, 6, 7, 8, 9];
     //    let mut i =  d1.iter().zip(d2.iter()).map(|(x,y)| if y>x {u8::zero()} else {x-y});
     let mut i = subtract(d1.iter(),d2.iter());
     assert_eq!(i.next(), Some(6));

@@ -343,5 +343,17 @@ fn main() {
     let incomplete = image_map.len() - complete;
     println!("Found {} complete scan images ({} incomplete).", complete, incomplete);
     println!("Dumping subtractive images");
-
+    fn img_from_path(path : String, rz : (usize, usize)) -> img_proc::MemImage<u8> {
+        img_proc::MemImage::from_iterator(
+            std::fs::File::open(path).unwrap().bytes().map(|x| x.unwrap()),
+            rz)
+    }
+    for (idx,iset) in image_map {
+        let resolution = (1280, 1024);
+        let limg = img_from_path(iset.l.unwrap(),resolution);
+        let rimg = img_from_path(iset.r.unwrap(),resolution);
+        let nimg = img_from_path(iset.n.unwrap(),resolution);
+        let ladj = &limg - &nimg;
+        let radj = &rimg - &nimg;
+    }
 }
