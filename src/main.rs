@@ -13,6 +13,7 @@ use docopt::Docopt;
 use regex::Regex;
 
 use kerbo::{Kerbo, KerboError, ImageType, Side};
+use kerbo::hw::KerboHW;
 
 mod preprocess;
 mod img_proc;
@@ -63,7 +64,7 @@ fn main() {
     if !args.get_bool("--skip-scan") {
         let port_path = args.get_str("--serial");
         let video_path = args.get_str("--video");
-        match Kerbo::new_from_portname(port_path,video_path) {
+        match KerboHW::new_from_portname(port_path,video_path) {
             Ok(mut k) => {
                 println!("Flushing port...");
                 k.flush_port_input().unwrap();
