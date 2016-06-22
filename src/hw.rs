@@ -1,6 +1,6 @@
 extern crate serial;
 
-use super::{Side,KerboError,Result};
+use super::{KerboError,Result};
 use rscam::{Frame,Camera, Config};
 use std::io::{Read,Write};
 use std::io;
@@ -9,6 +9,15 @@ use serial::SerialPort;
 use std::time::Duration;
 use std::thread;
 
+/// Lasers are mounted on either side of the camera. "Left" and "Right"
+/// here refer to the camera's point of view, not the user's!
+#[derive (Copy, Clone, Debug)]
+enum Side {
+    Left,
+    Right,
+}
+
+/// The Kerbo hardware state
 pub struct KerboHW {
     control_port : serial::SystemPort,
     turntable_position : u16,
@@ -16,7 +25,7 @@ pub struct KerboHW {
 }
 
 impl KerboHW {
-
+    /// Create a new Kerbo hardware object from an open serial port and a camera path.
     pub fn new_from_port (port : serial::SystemPort, cam_path : &str) -> Result<KerboHW> {
         let mut k = KerboHW { control_port : port,
                             turntable_position : 0 as u16,
@@ -24,7 +33,8 @@ impl KerboHW {
         k.flush_port_input().unwrap();
         // Test if this is the correct device by turning off the left laser.
         match k.laser(Side::Left, false) {
-            Ok(()) => Ok(k),
+            // If Ok, ensure right laser is off, too.
+            Ok(()) => { k.laser(Side::Right, false).unwrap(); Ok(k) },
             Err(e) => match e {
                 KerboError::Protocol(_) =>
                     Err(KerboError::from(String::from("Device is not a Kerbo"))),
@@ -33,6 +43,7 @@ impl KerboHW {
         }
     }
 
+    /// Create a new Kerbo hardware object from a serial port path and a camera path.
     pub fn new_from_portname
         (portname: &str, cam_path : &str) -> Result<KerboHW> {
         let port = try!(serial::open(portname));
@@ -95,7 +106,7 @@ impl KerboHW {
         Err(KerboError::from(String::from("Timeout")))
     }
     
-    pub fn laser(&mut self, side : Side, on : bool) -> Result<()> {
+    fn laser(&mut self, side : Side, on : bool) -> Result<()> {
         let cmd = match side {
             Side::Left => "r",
             Side::Right => "l",
@@ -118,7 +129,7 @@ impl KerboHW {
         Ok(position)
     }
 
-    pub fn scan_at(&mut self, position : u16, file_root : &str, side : Option<Side>) {
+    fn scan_at(&mut self, position : u16, file_root : &str, side : Option<Side>) {
         self.go_to_position(position).unwrap();
         match side { Some(x) => self.laser(x, true).unwrap(), None => () }
         thread::sleep(Duration::from_millis(50));

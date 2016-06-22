@@ -1,9 +1,12 @@
 // Top level lib
 extern crate serial;
 extern crate rscam;
+#[macro_use] extern crate lazy_static;
+extern crate regex;
 
 // Hardware Kerbo module
 pub mod hw;
+pub mod img;
 
 use std::io::{Read,Write};
 use std::io;
@@ -94,21 +97,6 @@ pub enum ImageType {
     /// Both lasers off, filter off
     Raw,
 }
-
-/// Lasers are mounted on either side of the camera. "Left" and "Right"
-/// here refer to the camera's point of view, not the user's!
-#[derive (Copy, Clone, Debug)]
-pub enum Side {
-    Left,
-    Right,
-}
-
-
-pub trait Kerbo {
-    fn capture_frame(&mut self, image_type : ImageType) -> Result<rscam::Frame>;
-    fn go_to_position(&mut self, position : u16) -> Result<u16>;
-}
-
 
 /// kerbo results default to KerboError as their error type
 pub type Result<T> = std::result::Result<T,KerboError>;
