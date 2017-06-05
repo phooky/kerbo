@@ -75,10 +75,13 @@ pub struct ImgSet {
     pub map : HashMap<u16, ImgSetEntry>
 }
 
+use std::fs::read_dir;
+
 impl ImgSet {
-    pub fn new_from_path(scan_path : &str) -> ImgSet {
+    pub fn new_from_path(scan_path : &str) -> Result<ImgSet,std::io::Error> {
         let mut img_set = ImgSet { map : HashMap::<u16,ImgSetEntry>::new() };
-        for p in std::fs::read_dir(scan_path).unwrap() {
+        let paths = try!(read_dir(scan_path));
+        for p in paths {
             let path = p.unwrap().file_name().to_str().unwrap().to_string();
             match parse_scan_path(path.as_str()) {
                 Some( (num, img_type) ) => {
@@ -94,6 +97,7 @@ impl ImgSet {
                 },
             }
         }
-        img_set
+        Ok(img_set)
     }
+
 }

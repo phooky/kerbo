@@ -1,4 +1,3 @@
-#![feature(zero_one)]
 #![allow(dead_code,unused_imports)]
 extern crate serial;
 extern crate docopt;
@@ -29,6 +28,11 @@ Options:
                       by the last scan.
 ";
 
+fn abort<T : Error>(err : T) {
+    writeln!(std::io::stderr(), "FATAL: {}\nExiting.", err.description().to_string());
+    std::process::exit(1);
+}
+
 fn main() {
     let argv = std::env::args();
     let args = Docopt::new(USAGE)
@@ -44,27 +48,19 @@ fn main() {
                 std::fs::create_dir_all(scan_path).unwrap();
                 k.scan(prefix.as_str(),64);
             },
-            Err(e) => {
-                let stderr = &mut std::io::stderr();
-                let detail = match e {
-                    KerboError::Serial(se) =>
-                        format!("Could not open {}: {}",port_path,se.description()),
-                    KerboError::Io(ioe) => ioe.description().to_string(),
-                    KerboError::Protocol(s) => s.description().to_string(),
-                };
-                writeln!(stderr, "Couldn't connect to Kerbo: {}. Exiting!",detail).unwrap();
-                std::process::exit(1);
-            },
+            Err(e) => abort(e),
         }
     }
     println!("Processing scan dir '{}'...",scan_path);
-          
-    let mut img_set = ImgSet::new_from_path(scan_path);
-    let complete = img_set.map.iter()
-        .filter(|&(_,x)| x.is_complete())
-        .count();
-    let incomplete = img_set.map.len() - complete;
-    println!("Found {} complete scan images ({} incomplete).", complete, incomplete);
+    match ImgSet::new_from_path(scan_path) {
+        Err(e) => abort(e),
+        Ok(img_set) => {
+            for (_,img_entry) in img_set.map.iter().filter(|&(_,x)| x.is_complete()) {
+                println!("image {}",img_entry.l.unwrap());
+            }
+        }
+    }
+
     println!("Dumping subtractive images");
     /*
     fn img_from_path(path : String, rz : (usize, usize)) -> img_proc::MemImage<u8> {
